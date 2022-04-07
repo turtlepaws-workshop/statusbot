@@ -6,6 +6,7 @@ import { Embed } from "../../util/embed";
 import { pages, autoSplitPages } from "discord.js-util";
 import { Tracker } from "../../entities/tracker";
 import { Color } from "../../config/config";
+import { ErrorMessage } from "../../util/util";
 
 export default class Cmd extends Command {
     constructor(){
@@ -108,6 +109,11 @@ export default class Cmd extends Command {
             });
         } else if(subcmd == "list"){
             const listed = await fetchAll(interaction.guild.id);
+            if(listed.length <= 0) return ErrorMessage(
+                "You don't have any trackers...",
+                interaction,
+                "blob_glitch"
+            );
             const pageString = await autoSplitPages(listed, (v: Tracker) => `**Bot:** ${v.botId == None ? "The selected is not a bot." : `<@${v.botId}>`}\n**Website:** ${v.URL == None ? "The selected is not a website." : v.URL}\n\n`)
             await new pages()
             .setPages(

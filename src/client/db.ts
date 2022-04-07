@@ -1,5 +1,5 @@
-import { Client, Guild, GuildMember, Message, MessageAttachment, User } from "discord.js";
-import { Repository, Entity, EntityTarget, FindOptionsWhere } from "typeorm";
+import { Client, Guild, GuildMember, Message, MessageAttachment, TextChannel, User } from "discord.js";
+import { Repository, Entity, EntityTarget, FindOptionsWhere, FindOneOptions } from "typeorm";
 import { AppDataSource } from "../sqlite";
 import StringMap, { parseStringMap } from "../lib/stringmap";
 import { Tracker } from "../entities/tracker";
@@ -88,7 +88,7 @@ export async function checkBot(botId: string, client: Client) {
     return member.presence.status;
 }
 
-export async function createIncident(guildId: string, botId: string, options: IncidentOptions) {
+export async function createIncident(guildId: string, botId: string, options: IncidentOptions, client: Client) {
     const repo = await getRepository<Tracker>(Tracker);
     const find = await repo.findOneBy({
         botId,
@@ -101,12 +101,30 @@ export async function createIncident(guildId: string, botId: string, options: In
         past: ""
     }, options));
 
-    return await repo.update({
+    const upd = await repo.update({
         botId,
         guildId
     }, {
         incidents: map.toString()
     });
+
+    const pastMap = new StringMap<number, SubIncident>()
+    pastMap.set(1, options);
+    const embed = generateMessageEmbed(Object.assign({
+        past: pastMap.toString()
+    }, options), client);
+    const guild = await client.guilds.fetch(guildId);
+    //@ts-expect-error
+    const channel: TextChannel = await guild.channels.fetch(find.channelId);
+    const message: Message = await channel.send({
+        embeds: embed.build()
+    });
+
+    return {
+        pastData: find,
+        data: upd,
+        message
+    };
 }
 
 export async function editIncident(guildId: string, botId: string, status: IncidentStatus, ID: string, by: string) {
@@ -154,9 +172,15 @@ export function generateMessageEmbed(data: Incident, client: Client){
     //@ts-expect-error
     const past: Map<string, SubIncident> = parseStringMap(data.past, "MAP");
     const ebd = new Embed()
-    .setTitle(`${getEmoji(data.current, client)} ${data.name}`)
-    .setDescription(`Last updated ${Timestamp(data.lastUpdated, "f")} by <@${data.lastUpdatedBy}>${data.description != null ? `\n\n${data.description}` : ""}`);
+    .setAuthor({
+        name: data.current,
+        iconURL: getEmoji(data.current, client).URL
+    })
+    .setTitle(`${data.name}`)
+    .setDescription(`Last updated ${Timestamp(data.lastUpdated, "f")} by <@${data.lastUpdatedBy}>${data.current == "Resolved" ? `Resolved ${Timestamp(data.lastUpdated, "f")} by <@${data.lastUpdatedBy}>` : ""}`);
+    //${data.description != null ? `\n\n${data.description}` : ""}
 
+    console.log(past, data);
     for(const i of past.values()){
         ebd.addField(`${getEmoji(i.current, client)} ${i.name}`, `${i.description == null ? "No description provided." : i.description}`)
     }
@@ -169,6 +193,13 @@ export async function fetchAll(guildId: string){
     const find = await repo.findBy({
         guildId
     });
+
+    return find;
+}
+
+export async function findOne(by: FindOptionsWhere<Tracker>){
+    const repo = await getRepository<Tracker>(Tracker);
+    const find = await repo.findOneBy(by);
 
     return find;
 }
