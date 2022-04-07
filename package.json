@@ -26,7 +26,7 @@
     "@types/uuid": "^8.3.4",
     "axios": "^0.26.1",
     "discord-trivia": "^0.5.0",
-    "discord.js-util": "^4.2.0",
+    "discord.js-util": "^5.0.4",
     "jest": "^27.5.1",
     "klaw-sync": "^6.0.0",
     "reflect-metadata": "^0.1.13",

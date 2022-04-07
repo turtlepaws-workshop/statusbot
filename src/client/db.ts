@@ -1,5 +1,5 @@
 import { Client, Guild, GuildMember, Message, MessageAttachment, User } from "discord.js";
-import { Repository, Entity, EntityTarget } from "typeorm";
+import { Repository, Entity, EntityTarget, FindOptionsWhere } from "typeorm";
 import { AppDataSource } from "../sqlite";
 import StringMap, { parseStringMap } from "../lib/stringmap";
 import { Tracker } from "../entities/tracker";
@@ -10,6 +10,7 @@ import { v4 } from "uuid";
 import { Embed } from ".././util/embed";
 import { Timestamp } from ".././util/util";
 export type IncidentStatus = "Identified" | "Resolved" | "Monitoring" | "Update";
+export const None = "null";
 export type SubIncident = {
     name: string,
     description?: string,
@@ -44,7 +45,8 @@ export async function createTracker(client: Client, options: {
     botId?: string,
     URL?: string,
     trackerType: trackerType,
-    guildId: string
+    guildId: string,
+    channelId: string
 }) {
     const repo = await getRepository<Tracker>(Tracker);
     let tracker = new Tracker();
@@ -52,17 +54,24 @@ export async function createTracker(client: Client, options: {
     if (options.trackerType == "BOT") {
         tracker.type = "BOT";
         tracker.botId = options.botId;
-        tracker.URL = null;
-    } else if (options.trackerType == "WEBSITE") {
+        tracker.URL = "null";
+    } else {
         tracker.type = "WEBSITE";
         tracker.URL = options.URL;
-        tracker.botId = null;
+        tracker.botId = "null";
     }
 
+    tracker.channelId = options.channelId;
     tracker.guildId = options.guildId;
     tracker.incidents = "";
 
     await repo.save([tracker]);
+}
+
+export async function deleteTracker(by: FindOptionsWhere<Tracker>){
+    const repo = await getRepository<Tracker>(Tracker);
+
+    return await repo.delete(by);
 }
 
 export async function checkWebsite(url: string) {

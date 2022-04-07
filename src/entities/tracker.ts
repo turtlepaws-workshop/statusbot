@@ -3,7 +3,7 @@ import { Entity, Column, PrimaryColumn, PrimaryGeneratedColumn } from "typeorm";
 @Entity()
 export class Tracker {
     @PrimaryGeneratedColumn()
-    Id: number
+    Id: any
 
     @Column()
     type: "BOT" | "WEBSITE";
@@ -19,4 +19,7 @@ export class Tracker {
 
     @Column()
     guildId: string
+
+    @Column()
+    channelId: string
 }

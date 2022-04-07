@@ -1,8 +1,11 @@
 import { CommandInteraction, CacheType, Client, AutocompleteInteraction } from "discord.js";
-import { createTracker, fetchAll } from "../../client/db";
+import { createTracker, deleteTracker, fetchAll, None } from "../../client/db";
 import BuildInSlashCommandBuilder from "../../lib/SlashCommandBuilder";
 import Command from "../../lib/command";
 import { Embed } from "../../util/embed";
+import { pages, autoSplitPages } from "discord.js-util";
+import { Tracker } from "../../entities/tracker";
+import { Color } from "../../config/config";
 
 export default class Cmd extends Command {
     constructor(){
@@ -17,6 +20,7 @@ export default class Cmd extends Command {
                     ["Website", "URL"],
                     ["Bot", "BOT"]
                 ]).setRequired(true))
+                .addChannelOption(e => e.setName("channel").setDescription("The channel to send auto updates in.").setRequired(true))
                 .addUserOption(e => e.setName("bot").setDescription("The bot to add. (IF you selected the bot type)"))
                 .addStringOption(e => e.setName("url").setDescription("The URL. (IF you selected the website type)"));
             })
@@ -39,7 +43,7 @@ export default class Cmd extends Command {
             ],
             runPermissions: [],
             somePermissions: [],
-            dev: true
+            dev: false
         });
     }
 
@@ -62,8 +66,8 @@ export default class Cmd extends Command {
                         return  (a.URL.startsWith(selected) || a.URL.endsWith(selected));
                     }
                 }).map(e => ({
-                    value: e.URL == null ? e.botId : e.URL,
-                    name: e.URL == null ? client.users.cache.get(e.botId).tag + " (Bot)" : `${e.URL} (Website)`
+                    value: e.Id.toString(),
+                    name: e.URL == None ? client.users.cache.get(e.botId).tag + " (Bot)" : `${e.URL} (Website)`
                 }))
             ]);
         }
@@ -77,19 +81,22 @@ export default class Cmd extends Command {
             const {
                 URL,
                 bot,
-                type
+                type,
+                channel
             } = {
                 URL: interaction.options.getString("url"),
                 bot: interaction.options.getUser("bot"),
-                type: interaction.options.getString("type")
+                type: interaction.options.getString("type"),
+                channel: interaction.options.getChannel("channel")
             }
 
             await createTracker(client, {
                 guildId: interaction.guild.id,
-                URL,
-                botId: bot.id,
+                URL: URL || "null",
+                botId: bot?.id,
                 //@ts-expect-error
-                trackerType: type
+                trackerType: type,
+                channelId: channel.id
             });
 
             await interaction.reply({
@@ -100,9 +107,31 @@ export default class Cmd extends Command {
                 ephemeral: true
             });
         } else if(subcmd == "list"){
-
+            const listed = await fetchAll(interaction.guild.id);
+            const pageString = await autoSplitPages(listed, (v: Tracker) => `**Bot:** ${v.botId == None ? "The selected is not a bot." : `<@${v.botId}>`}\n**Website:** ${v.URL == None ? "The selected is not a website." : v.URL}\n\n`)
+            await new pages()
+            .setPages(
+                pageString.toEmbeds().map(ebd => ebd.setColor(Color))
+            )
+            .setEmojis(client.customEmojis.get("arrow_left").toString(), client.customEmojis.get("arrow_right").toString())
+            .setInteraction(interaction)
+            .send({
+                ephemeral: true
+            });
         } else if(subcmd == "remove"){
+            const bot = interaction.options.getString("selected");
 
+            await deleteTracker({
+                Id: bot
+            });
+
+            await interaction.reply({
+                embeds: new Embed()
+                .setTitle(`${client.customEmojis.get("check_")} Deleted`)
+                .setDescription(`The tracker has been deleted.`)
+                .build(),
+                ephemeral: true
+            });
         }
     }
 }
